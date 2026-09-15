@@ -3,6 +3,16 @@ from pathlib import Path
 import duckdb, os
 
 
+from pathlib import Path
+
+Path(".gitignore").write_text(
+    "raw/\n"
+    "lake/\n"
+)
+
+print(Path(".gitignore").exists())
+print(Path(".gitignore").read_text())
+
 # SAS-токен видає викладач; у код репозиторію реальний токен не комітьте
 SOURCE_SAS = os.environ["SOURCE_SAS"]
 source = ContainerClient.from_container_url(SOURCE_SAS)
