@@ -1,0 +1,28 @@
+services:
+  airflow:
+    image: apache/airflow:3.3.1
+    container_name: airflow
+    command: standalone
+    ports:
+      - "8080:8080"
+    environment:
+      # не показувати десятки прикладів Airflow – у списку лише свої DAG-и
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      # вхід в UI без логіна і пароля (тільки для локального навчання)
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+    
+    volumes:
+      # усе, що Airflow пише сам (база, логи), лишається в томі й переживає перезапуск
+      - airflow-home:/opt/airflow
+      # DAG-и беруться з папки на комп'ютері – саме сюди студент кладе свої файли
+      - ./dags:/opt/airflow/dags
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/version"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+    restart: unless-stopped
+
+volumes:
+  airflow-home:
