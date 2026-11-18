@@ -1,0 +1,213 @@
+{
+    "name": "ingest_sales_data",
+    "objectId": "2f05cc70-938d-46db-a233-0a4ad8908b17",
+    "properties": {
+        "activities": [
+            {
+                "name": "Copy sales csv",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "Delete old files",
+                        "dependencyConditions": [
+                            "Completed"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "source": {
+                        "type": "DelimitedTextSource",
+                        "storeSettings": {
+                            "type": "HttpReadSettings",
+                            "requestMethod": "GET"
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextReadSettings"
+                        },
+                        "datasetSettings": {
+                            "annotations": [],
+                            "type": "DelimitedText",
+                            "typeProperties": {
+                                "location": {
+                                    "type": "HttpServerLocation"
+                                },
+                                "columnDelimiter": ",",
+                                "escapeChar": "\\",
+                                "firstRowAsHeader": true,
+                                "quoteChar": "\""
+                            },
+                            "schema": [],
+                            "externalReferences": {
+                                "connection": "02161d36-b0a1-4f8e-8112-93e26889b464"
+                            }
+                        }
+                    },
+                    "sink": {
+                        "type": "DelimitedTextSink",
+                        "storeSettings": {
+                            "type": "AzureBlobStorageWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextWriteSettings",
+                            "fileExtension": ".txt"
+                        },
+                        "datasetSettings": {
+                            "annotations": [],
+                            "linkedService": {
+                                "name": "ingest_lh",
+                                "properties": {
+                                    "annotations": [],
+                                    "type": "Lakehouse",
+                                    "typeProperties": {
+                                        "workspaceId": "4ba501b1-4593-468f-8696-1d8e9b3a1e62",
+                                        "artifactId": "004d678d-fcd6-4b4a-b128-a6124ab0e3f1",
+                                        "rootFolder": "Files"
+                                    }
+                                }
+                            },
+                            "type": "DelimitedText",
+                            "typeProperties": {
+                                "location": {
+                                    "type": "LakehouseLocation",
+                                    "fileName": "sales.csv",
+                                    "folderPath": "new_data"
+                                },
+                                "columnDelimiter": ",",
+                                "escapeChar": "\\",
+                                "firstRowAsHeader": true,
+                                "quoteChar": "\""
+                            },
+                            "schema": []
+                        }
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": true,
+                            "treatBooleanAsNumber": false
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Delete old files",
+                "type": "Delete",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "datasetSettings": {
+                        "annotations": [],
+                        "linkedService": {
+                            "name": "ingest_lh",
+                            "properties": {
+                                "annotations": [],
+                                "type": "Lakehouse",
+                                "typeProperties": {
+                                    "workspaceId": "4ba501b1-4593-468f-8696-1d8e9b3a1e62",
+                                    "artifactId": "004d678d-fcd6-4b4a-b128-a6124ab0e3f1",
+                                    "rootFolder": "Files"
+                                }
+                            }
+                        },
+                        "type": "Binary",
+                        "typeProperties": {
+                            "location": {
+                                "type": "LakehouseLocation",
+                                "folderPath": "new_data"
+                            }
+                        }
+                    },
+                    "enableLogging": false,
+                    "storeSettings": {
+                        "type": "AzureBlobStorageReadSettings",
+                        "recursive": true,
+                        "wildcardFileName": "*.csv",
+                        "enablePartitionDiscovery": false
+                    }
+                }
+            },
+            {
+                "name": "Load sales notebook",
+                "type": "TridentNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "Copy sales csv",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "notebookId": "eece5d2e-15f1-4e5b-9ad0-0b9c5f2c1415",
+                    "workspaceId": "4ba501b1-4593-468f-8696-1d8e9b3a1e62",
+                    "parameters": {
+                        "table_name": {
+                            "value": "dbo.new_sales",
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Send run report",
+                "type": "Office365Outlook",
+                "state": "Inactive",
+                "onInactiveMarkAs": "Succeeded",
+                "dependsOn": [
+                    {
+                        "activity": "Load sales notebook",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "typeProperties": {
+                    "inputs": {
+                        "method": "post",
+                        "path": "/v2/Mail",
+                        "body": {
+                            "To": "@pipeline().parameters.notify_to",
+                            "Subject": "@{concat(pipeline().Pipeline, ': ', pipeline().parameters.table_name)}",
+                            "Body": "<p>The pipline @{pipeline().Pipeline} is finnished.</p>\n<p>Run ID: @{pipeline().RunId}</p>\n<p>Table: @{pipeline().parameters.table_name}</p>\n<p>Rows copied: test</p>\n<p>Rows in table: @{activity('Load sales notebook').output.result.exitValue}</p>",
+                            "Sensitivity": "",
+                            "Importance": "Normal"
+                        }
+                    }
+                }
+            }
+        ],
+        "parameters": {
+            "table_name": {
+                "type": "string",
+                "defaultValue": "dbo.new_sales"
+            },
+            "notify_to": {
+                "type": "string"
+            }
+        },
+        "lastModifiedByObjectId": "0c2de938-727a-4131-9a9b-73f0f8ed92e7",
+        "lastPublishTime": "2026-11-11T12:10:33Z"
+    }
+}
